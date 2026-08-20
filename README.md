@@ -31,7 +31,7 @@ The default seeder creates the accounting data and a demo user:
 | Email    | `demo@example.com` |
 | Password | `password`         |
 
-The seeded ledger contains sample transactions from 2022 through 2026. The demo credentials are for local development only and must be changed or removed before a production deployment.
+The seeded ledger contains sample transactions from 2022 through 2026.
 
 ## Features
 
