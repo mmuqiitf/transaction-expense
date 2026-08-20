@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChartOfAccountController;
 use App\Http\Controllers\DashboardController;
@@ -14,10 +15,14 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('categories', CategoryController::class);
     Route::resource('chart-of-accounts', ChartOfAccountController::class);
+    Route::post('transactions/import', [TransactionController::class, 'import'])->name('transactions.import');
+    Route::get('transactions/import/sample', [TransactionController::class, 'downloadSample'])->name('transactions.import.sample');
     Route::resource('transactions', TransactionController::class);
 
     Route::get('reports/profit-loss', [ProfitLossController::class, 'index'])->name('reports.profit-loss.index');
     Route::get('reports/profit-loss/export', [ProfitLossController::class, 'export'])->name('reports.profit-loss.export');
+
+    Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
 });
 
 require __DIR__.'/settings.php';

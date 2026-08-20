@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { Filter, X } from '@lucide/vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Filter, Download, Upload, X } from '@lucide/vue';
 import { useDebounceFn } from '@vueuse/core';
 import { computed, h, ref } from 'vue';
 import TransactionController from '@/actions/App/Http/Controllers/TransactionController';
@@ -12,8 +12,17 @@ import {
 } from '@/components/data-table';
 import type { DataTableColumnDef } from '@/components/data-table';
 import Heading from '@/components/Heading.vue';
+import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
     Select,
@@ -86,8 +95,31 @@ defineOptions({
 
 const search = ref(props.filters.search ?? '');
 const filterDrawerOpen = ref(false);
+const importModalOpen = ref(false);
 const filterDraft = ref<TransactionFilterDraft>(emptyFilterDraft());
 const tableQuery = useTableQuery(transactionRoutes.index.url);
+
+const importForm = useForm<{ file: File | null }>({
+    file: null,
+});
+
+function handleFileChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+
+    if (target.files && target.files[0]) {
+        importForm.file = target.files[0];
+    }
+}
+
+function submitImport(): void {
+    importForm.post(TransactionController.import.url(), {
+        forceFormData: true,
+        onSuccess: () => {
+            importModalOpen.value = false;
+            importForm.reset();
+        },
+    });
+}
 
 function emptyFilterDraft(): TransactionFilterDraft {
     return {
@@ -354,11 +386,23 @@ const columns: DataTableColumnDef<Transaction>[] = [
             <Heading
                 title="Transactions"
                 description="Record income and expenses in the shared ledger."
-            /><Button as-child
-                ><Link :href="transactionRoutes.create()"
-                    >Add transaction</Link
-                ></Button
-            >
+            />
+            <div class="flex items-center gap-2">
+                <Button
+                    type="button"
+                    variant="outline"
+                    class="gap-1.5"
+                    @click="importModalOpen = true"
+                >
+                    <Upload class="size-4" />
+                    Import
+                </Button>
+                <Button as-child>
+                    <Link :href="transactionRoutes.create()"
+                        >Add transaction</Link
+                    >
+                </Button>
+            </div>
         </div>
         <DataTableToolbar
             :search="search"
@@ -540,6 +584,106 @@ const columns: DataTableColumnDef<Transaction>[] = [
                 </SheetFooter>
             </SheetContent>
         </Sheet>
+        <Dialog v-model:open="importModalOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Import Transactions</DialogTitle>
+                    <DialogDescription>
+                        Upload a CSV or Excel (.xlsx, .xls) file to batch import
+                        transactions into the ledger.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form
+                    @submit.prevent="submitImport"
+                    class="flex flex-col gap-4"
+                >
+                    <div class="flex flex-col gap-2">
+                        <label for="import-file" class="text-sm font-medium"
+                            >Select file</label
+                        >
+                        <Input
+                            id="import-file"
+                            type="file"
+                            accept=".csv, .xlsx, .xls, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                            @change="handleFileChange"
+                        />
+                        <InputError :message="importForm.errors.file" />
+                    </div>
+
+                    <div
+                        class="space-y-1 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground"
+                    >
+                        <p class="font-medium text-foreground">
+                            Supported column headers:
+                        </p>
+                        <ul class="list-disc space-y-0.5 pl-4">
+                            <li>
+                                <code class="font-mono font-semibold"
+                                    >date</code
+                                >
+                                (YYYY-MM-DD)
+                            </li>
+                            <li>
+                                <code class="font-mono font-semibold"
+                                    >coa_code</code
+                                >
+                                (e.g. 401, 602)
+                            </li>
+                            <li>
+                                <code class="font-mono font-semibold"
+                                    >amount</code
+                                >
+                                (or
+                                <code class="font-mono font-semibold"
+                                    >debit</code
+                                >
+                                /
+                                <code class="font-mono font-semibold"
+                                    >credit</code
+                                >)
+                            </li>
+                            <li>
+                                <code class="font-mono font-semibold"
+                                    >description</code
+                                >
+                                (optional)
+                            </li>
+                        </ul>
+                        <a
+                            :href="TransactionController.downloadSample.url()"
+                            class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                        >
+                            <Download class="size-3.5" />
+                            Download sample file
+                        </a>
+                    </div>
+
+                    <DialogFooter class="mt-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            :disabled="importForm.processing"
+                            @click="importModalOpen = false"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            :disabled="
+                                importForm.processing || !importForm.file
+                            "
+                        >
+                            {{
+                                importForm.processing
+                                    ? 'Importing...'
+                                    : 'Upload & Import'
+                            }}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
         <div class="rounded-xl border">
             <DataTable
                 :columns="columns"

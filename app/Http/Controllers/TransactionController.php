@@ -3,20 +3,26 @@
 namespace App\Http\Controllers;
 
 use App\Enums\CategoryType;
+use App\Http\Requests\TransactionImportRequest;
 use App\Http\Requests\TransactionIndexRequest;
 use App\Http\Requests\TransactionStoreRequest;
 use App\Http\Requests\TransactionUpdateRequest;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ChartOfAccountResource;
 use App\Http\Resources\TransactionResource;
+use App\Imports\TransactionsImport;
 use App\Models\Category;
 use App\Models\ChartOfAccount;
 use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class TransactionController extends Controller
 {
@@ -118,6 +124,36 @@ class TransactionController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Transaction deleted.')]);
 
         return to_route('transactions.index');
+    }
+
+    public function import(TransactionImportRequest $request): RedirectResponse
+    {
+        /** @var UploadedFile $file */
+        $file = $request->file('file');
+        $import = new TransactionsImport;
+
+        DB::transaction(function () use ($import, $file): void {
+            Excel::import($import, $file);
+        });
+
+        $count = $import->getImportedCount();
+
+        activity()
+            ->causedBy($request->user())
+            ->withProperties(['count' => $count, 'filename' => $file->getClientOriginalName()])
+            ->log("Imported {$count} transactions from {$file->getClientOriginalName()}");
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __(':count transactions imported successfully.', ['count' => $count])]);
+
+        return to_route('transactions.index');
+    }
+
+    public function downloadSample(): BinaryFileResponse
+    {
+        return response()->download(
+            resource_path('templates/sample-transactions-import.csv'),
+            'sample-transactions-import.csv',
+        );
     }
 
     /**

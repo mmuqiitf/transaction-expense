@@ -1,6 +1,6 @@
 # Transaction Expense
 
-Transaction Expense is a Laravel + Inertia Vue application for managing a shared income and expense ledger. It includes categories, chart-of-account entries, transactions, dashboard totals, profit/loss reporting, and XLSX export.
+Transaction Expense is a Laravel + Vue + Inertia.js application for managing a shared income and expense ledger. It includes categories, chart-of-account entries, transactions, dashboard totals, profit/loss reporting, and XLSX export.
 
 ## Requirements
 
@@ -33,22 +33,11 @@ The default seeder creates the accounting data and a demo user:
 
 The seeded ledger contains sample transactions from 2022 through 2026. The demo credentials are for local development only and must be changed or removed before a production deployment.
 
-## Development
+## Features
 
-Run the Vite development server alongside Laravel for live frontend updates:
-
-```bash
-npm run dev
-```
-
-Useful commands:
-
-```bash
-php artisan test --compact
-vendor/bin/pint --dirty --format agent
-npm run lint:check
-npm run format:check
-npm run types:check
-```
-
-Profit/loss reports can be filtered by year or custom date range and exported from the report page as an XLSX file.
+- Category management
+- Chart-of-account management
+- Transaction management
+- Dashboard & Profit/loss reporting
+- Import transactions
+- Audit logging

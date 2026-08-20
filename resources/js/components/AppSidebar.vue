@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, ChartColumn, LayoutGrid, Receipt, Tags } from '@lucide/vue';
+import {
+    BookOpen,
+    ChartColumn,
+    History,
+    LayoutGrid,
+    Receipt,
+    Tags,
+} from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -14,6 +21,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import auditLogRoutes from '@/routes/audit-logs';
 import categoryRoutes from '@/routes/categories';
 import accountRoutes from '@/routes/chart-of-accounts';
 import reportRoutes from '@/routes/reports';
@@ -45,6 +53,11 @@ const mainNavItems: NavItem[] = [
         title: 'Profit/Loss',
         href: reportRoutes.profitLoss.index(),
         icon: ChartColumn,
+    },
+    {
+        title: 'Audit Logs',
+        href: auditLogRoutes.index(),
+        icon: History,
     },
 ];
 </script>

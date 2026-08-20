@@ -73,3 +73,26 @@ export interface ProfitLossReport {
     };
     net_income: Record<string, number>;
 }
+
+export interface AuditLogUser {
+    id: number;
+    name: string;
+    email: string;
+}
+
+export interface AuditLog {
+    id: number;
+    log_name: string | null;
+    description: string;
+    event: string | null;
+    subject_type: string | null;
+    subject_type_name: string | null;
+    subject_id: number | null;
+    causer: AuditLogUser | null;
+    properties: {
+        attributes?: Record<string, unknown>;
+        old?: Record<string, unknown>;
+        [key: string]: unknown;
+    };
+    created_at: string;
+}
