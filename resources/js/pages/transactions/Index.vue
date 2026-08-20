@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import { Filter, X } from '@lucide/vue';
 import { useDebounceFn } from '@vueuse/core';
-import { h, ref } from 'vue';
+import { computed, h, ref } from 'vue';
 import TransactionController from '@/actions/App/Http/Controllers/TransactionController';
 import ConfirmDeleteButton from '@/components/ConfirmDeleteButton.vue';
 import {
@@ -21,6 +22,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetFooter,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import { useTableQuery } from '@/composables/useTableQuery';
 import { formatCurrency, formatDate } from '@/lib/format';
 import transactionRoutes from '@/routes/transactions';
@@ -50,6 +59,23 @@ const props = defineProps<{
     };
 }>();
 
+type TransactionFilterKey =
+    'search' | 'from' | 'to' | 'type' | 'category_id' | 'chart_of_account_id';
+
+type TransactionFilterDraft = {
+    from: string;
+    to: string;
+    type: CategoryType | 'all';
+    category_id: string;
+    chart_of_account_id: string;
+};
+
+type ActiveFilter = {
+    key: TransactionFilterKey;
+    label: string;
+    value: string;
+};
+
 defineOptions({
     layout: {
         breadcrumbs: [
@@ -59,20 +85,36 @@ defineOptions({
 });
 
 const search = ref(props.filters.search ?? '');
+const filterDrawerOpen = ref(false);
+const filterDraft = ref<TransactionFilterDraft>(emptyFilterDraft());
 const tableQuery = useTableQuery(transactionRoutes.index.url);
+
+function emptyFilterDraft(): TransactionFilterDraft {
+    return {
+        from: '',
+        to: '',
+        type: 'all',
+        category_id: 'all',
+        chart_of_account_id: 'all',
+    };
+}
+
+function currentFilterQuery(): Record<string, string | number | undefined> {
+    return {
+        from: props.filters.from ?? undefined,
+        to: props.filters.to ?? undefined,
+        type: props.filters.type ?? undefined,
+        category_id: props.filters.category_id ?? undefined,
+        chart_of_account_id: props.filters.chart_of_account_id ?? undefined,
+    };
+}
 
 function query(overrides: Record<string, unknown> = {}) {
     return {
         search: search.value || undefined,
         sort: props.filters.sort ?? undefined,
         direction: props.filters.direction ?? undefined,
-        filter: {
-            from: props.filters.from ?? undefined,
-            to: props.filters.to ?? undefined,
-            type: props.filters.type ?? undefined,
-            category_id: props.filters.category_id ?? undefined,
-            chart_of_account_id: props.filters.chart_of_account_id ?? undefined,
-        },
+        filter: currentFilterQuery(),
         ...overrides,
     };
 }
@@ -82,35 +124,140 @@ const updateSearch = useDebounceFn((value: string) => {
     tableQuery.update(query());
 }, 300);
 
-function updateDateFilter(key: 'from' | 'to', value: string): void {
-    tableQuery.update({
-        ...query(),
-        filter: { ...query().filter, [key]: value || undefined },
-    });
+function openFilterDrawer(): void {
+    filterDraft.value = {
+        from: props.filters.from ?? '',
+        to: props.filters.to ?? '',
+        type: props.filters.type ?? 'all',
+        category_id: props.filters.category_id
+            ? String(props.filters.category_id)
+            : 'all',
+        chart_of_account_id: props.filters.chart_of_account_id
+            ? String(props.filters.chart_of_account_id)
+            : 'all',
+    };
+    filterDrawerOpen.value = true;
 }
 
-function updateFilter(
-    key: 'type' | 'category_id' | 'chart_of_account_id',
-    value: string,
-): void {
+function applyFilters(): void {
     tableQuery.update({
         ...query(),
         filter: {
-            ...query().filter,
-            [key]:
-                value === 'all'
+            from: filterDraft.value.from || undefined,
+            to: filterDraft.value.to || undefined,
+            type:
+                filterDraft.value.type === 'all'
                     ? undefined
-                    : key === 'type'
-                      ? value
-                      : Number(value),
+                    : filterDraft.value.type,
+            category_id:
+                filterDraft.value.category_id === 'all'
+                    ? undefined
+                    : Number(filterDraft.value.category_id),
+            chart_of_account_id:
+                filterDraft.value.chart_of_account_id === 'all'
+                    ? undefined
+                    : Number(filterDraft.value.chart_of_account_id),
         },
     });
+    filterDrawerOpen.value = false;
 }
 
 function resetFilters(): void {
     search.value = '';
     tableQuery.update({});
 }
+
+function removeFilter(key: TransactionFilterKey): void {
+    if (key === 'search') {
+        search.value = '';
+        tableQuery.update(query());
+
+        return;
+    }
+
+    tableQuery.update({
+        ...query(),
+        filter: {
+            ...currentFilterQuery(),
+            [key]: undefined,
+        },
+    });
+}
+
+function categoryName(categoryId: number): string {
+    return (
+        props.categories.data.find((category) => category.id === categoryId)
+            ?.name ?? `Category #${categoryId}`
+    );
+}
+
+function accountName(accountId: number): string {
+    const account = props.accounts.data.find(
+        (account) => account.id === accountId,
+    );
+
+    return account
+        ? `${account.code} — ${account.name}`
+        : `Account #${accountId}`;
+}
+
+const activeFilters = computed<ActiveFilter[]>(() => {
+    const active: ActiveFilter[] = [];
+
+    if (search.value) {
+        active.push({ key: 'search', label: 'Search', value: search.value });
+    }
+
+    if (props.filters.from) {
+        active.push({
+            key: 'from',
+            label: 'From',
+            value: formatDate(props.filters.from),
+        });
+    }
+
+    if (props.filters.to) {
+        active.push({
+            key: 'to',
+            label: 'To',
+            value: formatDate(props.filters.to),
+        });
+    }
+
+    if (props.filters.type) {
+        active.push({
+            key: 'type',
+            label: 'Type',
+            value:
+                props.categoryTypes.find(
+                    (option) => option.value === props.filters.type,
+                )?.label ?? props.filters.type,
+        });
+    }
+
+    if (props.filters.category_id) {
+        active.push({
+            key: 'category_id',
+            label: 'Category',
+            value: categoryName(props.filters.category_id),
+        });
+    }
+
+    if (props.filters.chart_of_account_id) {
+        active.push({
+            key: 'chart_of_account_id',
+            label: 'Account',
+            value: accountName(props.filters.chart_of_account_id),
+        });
+    }
+
+    return active;
+});
+
+const appliedFilterCount = computed(
+    () =>
+        activeFilters.value.filter((filter) => filter.key !== 'search').length,
+);
 
 const columns: DataTableColumnDef<Transaction>[] = [
     {
@@ -216,95 +363,183 @@ const columns: DataTableColumnDef<Transaction>[] = [
         <DataTableToolbar
             :search="search"
             placeholder="Search description, account, or category..."
-            :has-active-filters="
-                Boolean(
-                    search ||
-                    filters.from ||
-                    filters.to ||
-                    filters.type ||
-                    filters.category_id ||
-                    filters.chart_of_account_id,
-                )
-            "
             @update:search="updateSearch"
-            @reset="resetFilters"
         >
-            <template #filters>
-                <Input
-                    type="date"
-                    :model-value="filters.from ?? ''"
-                    class="w-[150px]"
-                    aria-label="From date"
-                    @update:model-value="
-                        updateDateFilter('from', String($event))
-                    "
-                />
-                <Input
-                    type="date"
-                    :model-value="filters.to ?? ''"
-                    class="w-[150px]"
-                    aria-label="To date"
-                    @update:model-value="updateDateFilter('to', String($event))"
-                />
-                <Select
-                    :model-value="filters.type ?? 'all'"
-                    @update:model-value="updateFilter('type', String($event))"
-                    ><SelectTrigger class="w-[150px]"
-                        ><SelectValue placeholder="Type" /></SelectTrigger
-                    ><SelectContent
-                        ><SelectItem value="all">All types</SelectItem
-                        ><SelectItem
-                            v-for="option in categoryTypes"
-                            :key="option.value"
-                            :value="option.value"
-                            >{{ option.label }}</SelectItem
-                        ></SelectContent
-                    ></Select
+            <template #actions>
+                <Button
+                    type="button"
+                    variant="outline"
+                    class="w-full sm:w-auto"
+                    @click="openFilterDrawer"
                 >
-                <Select
-                    :model-value="
-                        filters.category_id
-                            ? String(filters.category_id)
-                            : 'all'
-                    "
-                    @update:model-value="
-                        updateFilter('category_id', String($event))
-                    "
-                    ><SelectTrigger class="w-[170px]"
-                        ><SelectValue placeholder="Category" /></SelectTrigger
-                    ><SelectContent
-                        ><SelectItem value="all">All categories</SelectItem
-                        ><SelectItem
-                            v-for="category in categories.data"
-                            :key="category.id"
-                            :value="String(category.id)"
-                            >{{ category.name }}</SelectItem
-                        ></SelectContent
-                    ></Select
-                >
-                <Select
-                    :model-value="
-                        filters.chart_of_account_id
-                            ? String(filters.chart_of_account_id)
-                            : 'all'
-                    "
-                    @update:model-value="
-                        updateFilter('chart_of_account_id', String($event))
-                    "
-                    ><SelectTrigger class="w-[170px]"
-                        ><SelectValue placeholder="Account" /></SelectTrigger
-                    ><SelectContent
-                        ><SelectItem value="all">All accounts</SelectItem
-                        ><SelectItem
-                            v-for="account in accounts.data"
-                            :key="account.id"
-                            :value="String(account.id)"
-                            >{{ account.code }} — {{ account.name }}</SelectItem
-                        ></SelectContent
-                    ></Select
-                >
+                    <Filter class="size-4" />
+                    Filters
+                    <span
+                        v-if="appliedFilterCount"
+                        class="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground"
+                    >
+                        {{ appliedFilterCount }}
+                    </span>
+                </Button>
             </template>
         </DataTableToolbar>
+        <div
+            v-if="activeFilters.length"
+            class="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2"
+        >
+            <span class="mr-1 text-sm text-muted-foreground">Filtered by</span>
+            <div
+                v-for="activeFilter in activeFilters"
+                :key="activeFilter.key"
+                class="inline-flex max-w-full items-center gap-1 rounded-md border bg-background px-2 py-1 text-sm"
+            >
+                <span class="text-muted-foreground"
+                    >{{ activeFilter.label }}:</span
+                >
+                <span class="max-w-48 truncate">{{ activeFilter.value }}</span>
+                <button
+                    type="button"
+                    class="ml-1 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    :aria-label="`Remove ${activeFilter.label} filter`"
+                    @click="removeFilter(activeFilter.key)"
+                >
+                    <span class="sr-only"
+                        >Remove {{ activeFilter.label }} filter</span
+                    >
+                    <X class="size-3" />
+                </button>
+            </div>
+            <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="ml-auto"
+                @click="resetFilters"
+            >
+                Clear all
+            </Button>
+        </div>
+        <Sheet v-model:open="filterDrawerOpen">
+            <SheetContent
+                class="w-full overflow-y-auto p-0 sm:max-w-md"
+                @open-auto-focus="(event) => event.preventDefault()"
+            >
+                <SheetHeader class="border-b px-6 py-5">
+                    <SheetTitle>Filter transactions</SheetTitle>
+                    <SheetDescription>
+                        Narrow the ledger by date, classification, category, or
+                        account.
+                    </SheetDescription>
+                </SheetHeader>
+                <div class="flex flex-col gap-6 px-6 py-6">
+                    <div class="flex flex-col gap-2">
+                        <label
+                            for="transaction-filter-from"
+                            class="text-sm font-medium"
+                            >From date</label
+                        >
+                        <Input
+                            id="transaction-filter-from"
+                            v-model="filterDraft.from"
+                            type="date"
+                        />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label
+                            for="transaction-filter-to"
+                            class="text-sm font-medium"
+                            >To date</label
+                        >
+                        <Input
+                            id="transaction-filter-to"
+                            v-model="filterDraft.to"
+                            type="date"
+                        />
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium">Type</label>
+                        <Select v-model="filterDraft.type">
+                            <SelectTrigger>
+                                <SelectValue placeholder="All types" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All types</SelectItem>
+                                <SelectItem
+                                    v-for="option in categoryTypes"
+                                    :key="option.value"
+                                    :value="option.value"
+                                >
+                                    {{ option.label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium">Category</label>
+                        <Select v-model="filterDraft.category_id">
+                            <SelectTrigger>
+                                <SelectValue placeholder="All categories" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all"
+                                    >All categories</SelectItem
+                                >
+                                <SelectItem
+                                    v-for="category in categories.data"
+                                    :key="category.id"
+                                    :value="String(category.id)"
+                                >
+                                    {{ category.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium">Account</label>
+                        <Select v-model="filterDraft.chart_of_account_id">
+                            <SelectTrigger>
+                                <SelectValue placeholder="All accounts" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all"
+                                    >All accounts</SelectItem
+                                >
+                                <SelectItem
+                                    v-for="account in accounts.data"
+                                    :key="account.id"
+                                    :value="String(account.id)"
+                                >
+                                    {{ account.code }} — {{ account.name }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <SheetFooter
+                    class="border-t px-6 py-4 sm:flex-row sm:justify-between"
+                >
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        @click="filterDraft = emptyFilterDraft()"
+                    >
+                        Clear filters
+                    </Button>
+                    <div class="flex gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="filterDrawerOpen = false"
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="button" @click="applyFilters">
+                            Apply filters
+                        </Button>
+                    </div>
+                </SheetFooter>
+            </SheetContent>
+        </Sheet>
         <div class="rounded-xl border">
             <DataTable
                 :columns="columns"

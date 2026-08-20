@@ -58,6 +58,41 @@ test('category index supports server-side search and pagination query parameters
         ->has('categories.data', 0));
 });
 
+test('transaction index combines search and filters on the server', function () {
+    $user = User::factory()->create();
+    $incomeCategory = Category::factory()->income()->create(['name' => 'Salary']);
+    $expenseCategory = Category::factory()->expense()->create(['name' => 'Meals']);
+    $incomeAccount = ChartOfAccount::factory()->for($incomeCategory)->create([
+        'code' => '401',
+        'name' => 'Salary account',
+    ]);
+    $expenseAccount = ChartOfAccount::factory()->for($expenseCategory)->create([
+        'code' => '601',
+        'name' => 'Meals account',
+    ]);
+
+    Transaction::factory()->create([
+        'chart_of_account_id' => $incomeAccount->id,
+        'description' => 'Monthly salary',
+    ]);
+    Transaction::factory()->create([
+        'chart_of_account_id' => $expenseAccount->id,
+        'description' => 'Monthly meal',
+    ]);
+
+    $response = $this->actingAs($user)->get(route('transactions.index', [
+        'search' => 'salary',
+        'filter' => ['type' => CategoryType::Income->value],
+    ]));
+
+    $response->assertInertia(fn (Assert $page): Assert => $page
+        ->component('transactions/Index')
+        ->where('filters.search', 'salary')
+        ->where('filters.type', CategoryType::Income->value)
+        ->has('transactions.data', 1)
+        ->where('transactions.data.0.description', 'Monthly salary'));
+});
+
 test('seeded data includes the demo account and reproduces the profit loss report', function () {
     $this->seed(AccountingSeeder::class);
 
